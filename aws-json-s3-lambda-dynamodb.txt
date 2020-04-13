@@ -1,0 +1,160 @@
+Task1: AWS Lambda : Load json file to S3 bucket and put in dynamodb using Lambda function
+
+JSON -> s3 bucket -> Lambda  -> DynamoDB
+
+
+1. Login to AWS account
+2. Create a dynamodb table 
+
+Table name: emp
+Primary Key; emp_id
+
+3. Create S3 bucket 
+
+Name: S3bucket-json
+
+4. Setup IAM role for Lambda.
+
+IAM role should contain permission to following:
+
+- Should have permission to access s3 bucket 
+- Should have permission to access DynamoDB
+- And also should have permission to access 'Cloudwatch Logs'
+
+IAM: 
+1st  create policy, choose service 
+
+- 	Service 'Cloudwatch Logs' 
+	Actions - All cloudwatch logs actions
+	Resources - All resources
+
+Click on Additional Permission
+
+- 	Service 's3' 
+	Actions - All cloudwatch logs actions
+	Resources - All resources
+
+Click on Additional Permission
+
+- 	Service 'dynamodb' 
+	Actions - All cloudwatch logs actions
+	Resources - All resources
+
+	Name policy as 's3_json_dynamodb'
+	
+Now Create a Role:
+
+- AWS Service-> select 'Lambda' -> select the policy create as above -> name role as 's3_json_dynamodb'
+
+Done with Role and policy
+
+............................
+
+Now create Lambda function, access Lambda aws service
+
+1. create function
+2. select 'Author from scratch'
+3. Function name: s3_json_dynamodb
+4. Runtime: Python3.6
+5. Choose and execution Role:
+	Existing role name as 's3_json_dynamodb'
+6. Click on create function button.
+
+/////////////////
+import json
+import boto3
+
+s3_client = boto3.client('s3')
+
+def lambda_handler(event, context):
+    # TODO implement
+    print(str(event))
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
+	
+SAVE it
+
+Now we need to Add trigger , when json file is uploaded to s3 it has to generate trigger to lambda function
+
+1. Click on Add Tigger 
+2. Select s3 
+3. select bucket 's3bucket-json' 
+4. Event Type: All object create events
+5. suffix -> .json
+
+whenever a file with .json extension uploaded to s3 bucket it going to triger the lambda function
+
+Now lets upload empdata.json in s3 bucket 
+{
+	"emp_id":"3"
+	"name":"Biru",
+	"age":38,
+	"Location":["PUNE"]
+}
+
+Look for logs in  aws cloudwatch ->logs->Log groups  '/aws/lambda/s3_json_dynamodb'
+
+below logs found:
+
+{'Records': [{'eventVersion': '2.1', 'eventSource': 'aws:s3', 'awsRegion': 'us-east-2', 'eventTime': '2020-04-13T11:14:02.193Z', 'eventName': 'ObjectCreated:Put', 'userIdentity': {'principalId': 'AWS:AIDAYMZ72KRLIM2G2TBN6'}, 'requestParameters': {'sourceIPAddress': '103.243.114.13'}, 'responseElements': {'x-amz-request-id': 'D1187F312C74E7DA', 'x-amz-id-2': 'GInPY16cbUVY1OltYNjf7sJQsweqRLTQiihPts+lQV0Gla9Kp5KfxFEbo5/GtzR5iXRoLgzURwKWIqRcgo0AnriASoadf0yy'}, 's3': {'s3SchemaVersion': '1.0', 'configurationId': '5673addd-0b4d-440e-88f2-515e219c7ca4', 'bucket': {'name': 's3bucket-json', 'ownerIdentity': {'principalId': 'A2ZC241AP6UBR5'}, 'arn': 'arn:aws:s3:::s3bucket-json'}, 'object': {'key': 'empdata.json', 'size': 70, 'eTag': '72f7543350223d419969dd34e35ee69c', 'sequencer': '005E94497A74E0E15D'}}}]}
+
+Format it in "http://jsonviewer.stack.hu/"
+From above logs we need to get:
+	bucket name and file key such as download and process file and store in dynamodb.
+
+/////////
+import json
+import boto3
+
+s3_client = boto3.client('s3')
+
+def lambda_handler(event, context):
+    # TODO implement
+    #print(str(event))
+    bucket_name = event['Records'][0]['s3']['bucket']['name']
+    json_file = event['Records'][0]['s3']['object']['key']
+    
+    print(bucket_name)
+    print(json_file)
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
+	
+SAVE IT	
+///////////////
+Lets run it again.
+
+1. Delete the s3 object from bucket and again re upload it.
+2. Check cloudwatch logs again 
+
+////////////
+Now edit lambda function for adding json to dynamodb as below:
+
+import json
+import boto3
+s3_client = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb')
+def lambda_handler(event, context):
+    bucket_name = event['Records'][0]['s3']['bucket']['name']
+    json_file = event['Records'][0]['s3']['object']['key']
+    json_object = s3_client.get_object(Bucket=bucket_name,Key=json_file)
+    jsonFileReader = json_object['Body'].read()
+    jsonDict = json.loads(jsonFileReader)
+    table = dynamodb.Table('emp')
+    table.put_item(Item=jsonDict)
+    return 'Hello from Lambda!'
+    
+
+/////////////////
+Lets run it again.
+
+1. Delete the s3 object from bucket and again re upload it.
+2. Check cloudwatch logs again 
+	
+	
+	
